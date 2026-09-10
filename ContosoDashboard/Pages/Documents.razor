@@ -1,0 +1,298 @@
+@page "/documents"
+@using ContosoDashboard.Models
+@using ContosoDashboard.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Security.Claims
+@attribute [Authorize]
+@inject IDocumentService DocumentService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Documents - ContosoDashboard</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4 align-items-center">
+        <div class="col">
+            <h1>Documents</h1>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#uploadPanel">
+                Upload Document
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <div class="alert @(isError ? "alert-danger" : "alert-success")" role="alert">
+            @statusMessage
+        </div>
+    }
+
+    <div id="uploadPanel" class="collapse @(showUploadPanel ? "show" : "") mb-4">
+        <div class="card">
+            <div class="card-body">
+                <EditForm Model="uploadRequest" OnValidSubmit="UploadAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Title</label>
+                            <InputText @bind-Value="uploadRequest.Title" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Category</label>
+                            <InputText @bind-Value="uploadRequest.Category" class="form-control" placeholder="General" />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Description</label>
+                            <InputTextArea @bind-Value="uploadRequest.Description" class="form-control" rows="3" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Project (optional)</label>
+                            <InputNumber @bind-Value="uploadRequest.ProjectId" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">File</label>
+                            <InputFile OnChange="HandleFileSelected" class="form-control" />
+                        </div>
+                    </div>
+
+                    <div class="mt-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" disabled="@(selectedFile == null || isUploading)">
+                            @(isUploading ? "Uploading..." : "Upload")
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">
+                            Clear
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Search</label>
+                    <input class="form-control" value="@searchTerm" @oninput="OnSearchChanged" placeholder="Title, description, project, uploader" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Category</label>
+                    <select class="form-select" value="@categoryFilter" @onchange="OnCategoryChanged">
+                        <option value="">All categories</option>
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button class="btn btn-outline-primary" @onclick="RefreshAsync">Refresh</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (documents == null)
+    {
+        <p><em>Loading documents...</em></p>
+    }
+    else if (!documents.Any())
+    {
+        <div class="alert alert-info">No documents found for your current filter.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Category</th>
+                        <th>Project</th>
+                        <th>Uploaded</th>
+                        <th>Size</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var document in documents)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@document.Title</strong>
+                                @if (!string.IsNullOrWhiteSpace(document.Description))
+                                {
+                                    <div class="small text-muted">@document.Description</div>
+                                }
+                            </td>
+                            <td><span class="badge bg-secondary">@document.Category</span></td>
+                            <td>@(document.Project?.Name ?? "Personal")</td>
+                            <td>@document.UploadedAtUtc.ToString("MMM dd, yyyy")</td>
+                            <td>@FormatBytes(document.FileSizeBytes)</td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a class="btn btn-outline-primary" href="/documents/@document.DocumentId">View</a>
+                                    <button class="btn btn-outline-secondary" @onclick="() => DownloadAsync(document.DocumentId)">Download</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private int currentUserId;
+    private List<Document>? documents;
+    private List<string> categories = new();
+    private UploadRequest uploadRequest = new();
+    private IBrowserFile? selectedFile;
+    private string? statusMessage;
+    private bool isError;
+    private bool isUploading;
+    private string searchTerm = string.Empty;
+    private string categoryFilter = string.Empty;
+    private bool showUploadPanel = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim != null && int.TryParse(userIdClaim.Value, out var currentUserIdValue))
+        {
+            currentUserId = currentUserIdValue;
+        }
+
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (currentUserId <= 0)
+        {
+            return;
+        }
+
+        documents = await DocumentService.GetAccessibleDocumentsAsync(currentUserId, null, searchTerm, categoryFilter);
+        categories = documents
+            .Select(d => d.Category)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c)
+            .ToList();
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        if (selectedFile != null)
+        {
+            statusMessage = $"Selected file: {selectedFile.Name}";
+            isError = false;
+        }
+    }
+
+    private async Task UploadAsync()
+    {
+        if (selectedFile == null || currentUserId <= 0)
+        {
+            statusMessage = "Please choose a file before uploading.";
+            isError = true;
+            return;
+        }
+
+        try
+        {
+            isUploading = true;
+            var document = new Document
+            {
+                Title = uploadRequest.Title,
+                Description = uploadRequest.Description,
+                Category = string.IsNullOrWhiteSpace(uploadRequest.Category) ? "General" : uploadRequest.Category,
+                ProjectId = uploadRequest.ProjectId > 0 ? uploadRequest.ProjectId : null
+            };
+
+            await using var stream = selectedFile.OpenReadStream(25 * 1024 * 1024);
+            await DocumentService.UploadDocumentAsync(document, stream, selectedFile.Name, currentUserId, selectedFile.ContentType);
+
+            ResetForm();
+            statusMessage = "Document uploaded successfully.";
+            isError = false;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = ex.Message;
+            isError = true;
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        uploadRequest = new UploadRequest();
+        selectedFile = null;
+        showUploadPanel = true;
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        _ = RefreshAsync();
+    }
+
+    private async Task OnCategoryChanged(ChangeEventArgs e)
+    {
+        categoryFilter = e.Value?.ToString() ?? string.Empty;
+        await RefreshAsync();
+    }
+
+    private async Task DownloadAsync(int documentId)
+    {
+        try
+        {
+            var document = documents?.FirstOrDefault(d => d.DocumentId == documentId);
+            if (document == null)
+            {
+                throw new InvalidOperationException("Document not found.");
+            }
+
+            var stream = await DocumentService.DownloadDocumentAsync(documentId, currentUserId);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            await stream.DisposeAsync();
+
+            statusMessage = $"Document '{document.Title}' downloaded successfully.";
+            isError = false;
+        }
+        catch (Exception ex)
+        {
+            statusMessage = ex.Message;
+            isError = true;
+        }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private class UploadRequest
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public int ProjectId { get; set; }
+    }
+}

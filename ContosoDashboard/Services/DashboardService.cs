@@ -40,7 +40,14 @@ public class DashboardService : IDashboardService
                 .CountAsync(),
 
             UnreadNotifications = await _context.Notifications
-                .CountAsync(n => n.UserId == userId && !n.IsRead)
+                .CountAsync(n => n.UserId == userId && !n.IsRead),
+
+            RecentDocuments = await _context.Documents
+                .Where(d => !d.IsDeleted && (d.UploadedByUserId == userId || d.ProjectId.HasValue && d.Project!.ProjectMembers.Any(pm => pm.UserId == userId) || d.Shares.Any(s => s.UserId == userId && s.IsActive)))
+                .CountAsync(),
+
+            SharedDocuments = await _context.Documents
+                .CountAsync(d => !d.IsDeleted && d.Shares.Any(s => s.UserId == userId && s.IsActive))
         };
 
         return summary;
@@ -67,4 +74,6 @@ public class DashboardSummary
     public int TasksDueToday { get; set; }
     public int ActiveProjects { get; set; }
     public int UnreadNotifications { get; set; }
+    public int RecentDocuments { get; set; }
+    public int SharedDocuments { get; set; }
 }
