@@ -29,6 +29,21 @@ public class LocalFileStorageService : IFileStorageService
         return targetPath;
     }
 
+    public async Task<string> ComputeSha256Async(Stream fileStream)
+    {
+        if (fileStream == null)
+            throw new ArgumentNullException(nameof(fileStream));
+
+        var originalPosition = fileStream.CanSeek ? fileStream.Position : 0;
+        var hash = await System.Security.Cryptography.SHA256.HashDataAsync(fileStream);
+        if (fileStream.CanSeek)
+        {
+            fileStream.Position = originalPosition;
+        }
+
+        return Convert.ToHexString(hash);
+    }
+
     public Task DeleteAsync(string storedFilePath)
     {
         if (!string.IsNullOrWhiteSpace(storedFilePath) && File.Exists(storedFilePath))

@@ -46,6 +46,14 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
+if (builder.Configuration.GetValue("AzureStorage:ScanQueueEnabled", false))
+{
+    builder.Services.AddSingleton<IDocumentScanQueue, AzureDocumentScanQueue>();
+}
+else
+{
+    builder.Services.AddSingleton<IDocumentScanQueue, LocalDocumentScanQueue>();
+}
 
 // Add HttpContextAccessor for accessing user claims
 builder.Services.AddHttpContextAccessor();

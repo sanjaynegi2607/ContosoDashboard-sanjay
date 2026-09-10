@@ -22,6 +22,7 @@ public class DocumentService : IDocumentService
     private readonly ApplicationDbContext _context;
     private readonly IFileStorageService _fileStorageService;
     private readonly INotificationService _notificationService;
+    private readonly IDocumentScanQueue _documentScanQueue;
     private const long MaxFileSizeBytes = 25 * 1024 * 1024;
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -30,11 +31,16 @@ public class DocumentService : IDocumentService
         ".webp"
     };
 
-    public DocumentService(ApplicationDbContext context, IFileStorageService fileStorageService, INotificationService notificationService)
+    public DocumentService(
+        ApplicationDbContext context,
+        IFileStorageService fileStorageService,
+        INotificationService notificationService,
+        IDocumentScanQueue documentScanQueue)
     {
         _context = context;
         _fileStorageService = fileStorageService;
         _notificationService = notificationService;
+        _documentScanQueue = documentScanQueue;
     }
 
     public async Task<List<Document>> GetAccessibleDocumentsAsync(int requestingUserId, int? projectId = null, string? search = null, string? category = null)
@@ -46,7 +52,7 @@ public class DocumentService : IDocumentService
             .Where(d => !d.IsDeleted)
             .Where(d =>
                 d.UploadedByUserId == requestingUserId ||
-                d.ProjectId.HasValue && d.Project.ProjectMembers.Any(pm => pm.UserId == requestingUserId) ||
+                d.ProjectId.HasValue && d.Project != null && d.Project.ProjectMembers.Any(pm => pm.UserId == requestingUserId) ||
                 d.Shares.Any(s => s.UserId == requestingUserId && s.IsActive));
 
         if (projectId.HasValue)
@@ -65,6 +71,7 @@ public class DocumentService : IDocumentService
             query = query.Where(d =>
                 d.Title.Contains(term) ||
                 d.Description != null && d.Description.Contains(term) ||
+                d.Tags != null && d.Tags.Contains(term) ||
                 d.FileName.Contains(term) ||
                 d.UploadedByUser.DisplayName.Contains(term) ||
                 (d.Project != null && d.Project.Name.Contains(term)));
@@ -133,31 +140,60 @@ public class DocumentService : IDocumentService
             throw new InvalidOperationException("Invalid file name.");
         }
 
-        var safeUniquePath = await _fileStorageService.UploadAsync(fileStream, originalFileName, contentType ?? "application/octet-stream");
+        await using var bufferedStream = new MemoryStream();
+        await fileStream.CopyToAsync(bufferedStream);
+        bufferedStream.Position = 0;
+        var contentHash = await _fileStorageService.ComputeSha256Async(bufferedStream);
+        bufferedStream.Position = 0;
+        var safeUniquePath = await _fileStorageService.UploadAsync(bufferedStream, originalFileName, contentType ?? "application/octet-stream");
 
         document.Title = document.Title.Trim();
+        document.Category = document.Category.Trim();
+        document.Tags = string.IsNullOrWhiteSpace(document.Tags) ? null : document.Tags.Trim();
         document.FileName = cleanedName;
         document.StoredFilePath = safeUniquePath;
         document.FileType = extension.TrimStart('.');
-        document.FileSizeBytes = fileStream.Length;
+        document.FileSizeBytes = bufferedStream.Length;
         document.UploadedByUserId = requestingUserId;
         document.UploadedAtUtc = DateTime.UtcNow;
         document.UpdatedAtUtc = DateTime.UtcNow;
         document.IsDeleted = false;
+        document.ScanStatus = _documentScanQueue.IsEnabled ? "PendingScan" : "Clean";
+        document.ScanContentHash = contentHash;
+        document.ScanUpdatedAtUtc = DateTime.UtcNow;
+        document.ScanError = null;
 
-        _context.Documents.Add(document);
-        await _context.SaveChangesAsync();
-
-        _context.UploadAuditLogs.Add(new UploadAuditLog
+        try
         {
-            DocumentId = document.DocumentId,
-            UserId = requestingUserId,
-            ActionType = "Upload",
-            ActionDateUtc = DateTime.UtcNow,
-            Details = $"Uploaded {document.FileName}"
-        });
+            _context.Documents.Add(document);
+            await _context.SaveChangesAsync();
 
-        await _context.SaveChangesAsync();
+            _context.UploadAuditLogs.Add(new UploadAuditLog
+            {
+                DocumentId = document.DocumentId,
+                UserId = requestingUserId,
+                ActionType = "Upload",
+                ActionDateUtc = DateTime.UtcNow,
+                Details = $"Uploaded {document.FileName}"
+            });
+
+            await _context.SaveChangesAsync();
+
+            if (_documentScanQueue.IsEnabled)
+            {
+                await _documentScanQueue.PublishAsync(new DocumentScanMessage(
+                    "1",
+                    document.DocumentId,
+                    document.StoredFilePath,
+                    contentHash,
+                    document.UploadedAtUtc));
+            }
+        }
+        catch
+        {
+            await _fileStorageService.DeleteAsync(safeUniquePath);
+            throw;
+        }
 
         if (document.ProjectId.HasValue)
         {
@@ -181,7 +217,7 @@ public class DocumentService : IDocumentService
                 {
                     UserId = memberId,
                     Title = "New project document",
-                    Message = $"A new document '{document.Title}' is available in the project.",
+                    Message = $"A new document '{document.Title}' was uploaded and is queued for security scanning.",
                     Type = NotificationType.ProjectUpdate,
                     Priority = NotificationPriority.Informational
                 });
@@ -197,6 +233,11 @@ public class DocumentService : IDocumentService
         if (document == null)
         {
             throw new UnauthorizedAccessException("You do not have access to this document.");
+        }
+
+        if (!string.Equals(document.ScanStatus, "Clean", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("This document is not available until its security scan is complete.");
         }
 
         var stream = await _fileStorageService.DownloadAsync(document.StoredFilePath);
