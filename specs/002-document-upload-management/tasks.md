@@ -13,10 +13,10 @@ description: "Executable task list for Document Upload and Management"
 
 **Purpose**: Establish the source-project and deployment configuration needed by the feature.
 
-- [ ] T001 Create the `ContosoDashboard.Scanner` Azure Functions isolated-worker project structure with `ContosoDashboard.Scanner/ContosoDashboard.Scanner.csproj` and `ContosoDashboard.Scanner/Program.cs` targeting the repository's .NET 10 toolchain.
-- [ ] T002 [P] Add Azure Functions Queue Storage and worker configuration placeholders in `ContosoDashboard.Scanner/host.json`, `ContosoDashboard.Scanner/local.settings.json.example`, and `ContosoDashboard/appsettings.json` without committing secrets.
-- [ ] T003 [P] Update `ContosoDashboard/ContosoDashboard.csproj` with the minimal Azure Storage Queue client dependency required for publishing scan messages, preserving existing EF Core SQLite packages.
-- [ ] T004 [P] Update `README.md` with the .NET 10, SQLite, offline scanner fallback, and optional Azure Queue Storage/Azure Functions setup paths.
+- [X] T001 Create the `ContosoDashboard.Scanner` Azure Functions isolated-worker project structure with `ContosoDashboard.Scanner/ContosoDashboard.Scanner.csproj` and `ContosoDashboard.Scanner/Program.cs` targeting the Functions-supported `net8.0` worker runtime under the repository's .NET 10 SDK toolchain.
+- [X] T002 [P] Add Azure Functions Queue Storage and worker configuration placeholders in `ContosoDashboard.Scanner/host.json`, `ContosoDashboard.Scanner/local.settings.json.example`, and `ContosoDashboard/appsettings.json` without committing secrets.
+- [X] T003 [P] Update `ContosoDashboard/ContosoDashboard.csproj` with the minimal Azure Storage Queue client dependency required for publishing scan messages, preserving existing EF Core SQLite packages.
+- [X] T004 [P] Update `README.md` with the .NET 10, SQLite, offline scanner fallback, and optional Azure Queue Storage/Azure Functions setup paths.
 
 ---
 
@@ -24,14 +24,14 @@ description: "Executable task list for Document Upload and Management"
 
 **Purpose**: Implement blocking data, storage, queue, and security foundations required by every user story.
 
-- [ ] T005 Add `ScanStatus`, `ScanContentHash`, `ScanUpdatedAtUtc`, and user-safe `ScanError` properties to `ContosoDashboard/Models/Document.cs` with the exact allowed states `PendingScan`, `Clean`, `Quarantined`, and `ScanFailed`.
-- [ ] T006 Update `ContosoDashboard/Data/ApplicationDbContext.cs` to configure document scan fields, useful indexes, and SQLite-compatible persistence for the scan lifecycle.
-- [ ] T007 Create the versioned scan message contract in `ContosoDashboard/Services/DocumentScanMessage.cs` with `schemaVersion`, `documentId`, `storedFilePath`, `contentHash`, and `uploadedAtUtc` fields.
-- [ ] T008 [P] Create the queue publishing abstraction and Azure Queue Storage implementation in `ContosoDashboard/Services/IDocumentScanQueue.cs` and `ContosoDashboard/Services/AzureDocumentScanQueue.cs`, including configuration-based enablement and no-secret logging.
-- [ ] T009 [P] Create the local disabled/deterministic queue fallback in `ContosoDashboard/Services/LocalDocumentScanQueue.cs` and its configuration contract so offline training does not require Azure resources.
-- [ ] T010 Update `ContosoDashboard/Services/IFileStorageService.cs` and `ContosoDashboard/Services/LocalFileStorageService.cs` to expose a safe worker-readable storage identifier and content-hash calculation without exposing public URLs.
-- [ ] T011 Refactor shared authorization and scan-status checks in `ContosoDashboard/Services/DocumentService.cs` so list, detail, download, preview, share, replace, and delete operations exclude deleted documents and block non-`Clean` files from download/preview.
-- [ ] T012 Register the scan queue implementation and related configuration in `ContosoDashboard/Program.cs`, defaulting to the offline local adapter when Azure integration is not enabled.
+- [X] T005 Add `ScanStatus`, `ScanContentHash`, `ScanUpdatedAtUtc`, and user-safe `ScanError` properties to `ContosoDashboard/Models/Document.cs` with the exact allowed states `PendingScan`, `Clean`, `Quarantined`, and `ScanFailed`.
+- [X] T006 Update `ContosoDashboard/Data/ApplicationDbContext.cs` to configure document scan fields, useful indexes, and SQLite-compatible persistence for the scan lifecycle.
+- [X] T007 Create the versioned scan message contract in `ContosoDashboard/Services/DocumentScanMessage.cs` with `schemaVersion`, `documentId`, `storedFilePath`, `contentHash`, and `uploadedAtUtc` fields.
+- [X] T008 [P] Create the queue publishing abstraction and Azure Queue Storage implementation in `ContosoDashboard/Services/IDocumentScanQueue.cs` and `ContosoDashboard/Services/AzureDocumentScanQueue.cs`, including configuration-based enablement and no-secret logging.
+- [X] T009 [P] Create the local disabled/deterministic queue fallback in `ContosoDashboard/Services/LocalDocumentScanQueue.cs` and its configuration contract so offline training does not require Azure resources.
+- [X] T010 Update `ContosoDashboard/Services/IFileStorageService.cs` and `ContosoDashboard/Services/LocalFileStorageService.cs` to expose a safe worker-readable storage identifier and content-hash calculation without exposing public URLs.
+- [X] T011 Refactor shared authorization and scan-status checks in `ContosoDashboard/Services/DocumentService.cs` so list, detail, download, preview, share, replace, and delete operations exclude deleted documents and block non-`Clean` files from download/preview.
+- [X] T012 Register the scan queue implementation and related configuration in `ContosoDashboard/Program.cs`, defaulting to the offline local adapter when Azure integration is not enabled.
 
 **Checkpoint**: The database, queue boundary, storage boundary, and authorization rules are ready before story work begins.
 
@@ -45,12 +45,12 @@ description: "Executable task list for Document Upload and Management"
 
 ### Implementation
 
-- [ ] T013 [US1] Update `ContosoDashboard/Services/DocumentService.cs` to validate the 25 MB limit, extension allowlist, sanitized display name, required title/category, and optional project association before storage.
-- [ ] T014 [US1] Update `ContosoDashboard/Services/DocumentService.cs` to persist uploaded documents as `PendingScan`, compute and store the content hash, publish exactly one scan message only after file/metadata persistence succeeds, and clean up storage on persistence failure.
-- [ ] T015 [US1] Update `ContosoDashboard/Services/DocumentService.cs` to record upload audit events and ensure project notifications do not imply that a non-clean document is downloadable.
-- [ ] T016 [US1] Update `ContosoDashboard/Pages/Documents.razor` to show upload progress/busy state, validation errors, `PendingScan`/terminal scan status, and a clear success message after the upload request completes.
-- [ ] T017 [US1] Update `ContosoDashboard/Models/Document.cs` and `ContosoDashboard/Pages/Documents.razor` to support optional description, project association, tags, and user-visible scan-safe metadata without exposing the physical storage path.
-- [ ] T018 [US1] Update `ContosoDashboard/Pages/Documents.razor` to disable download/preview actions until the document scan status is `Clean` and present safe messaging for `Quarantined` and `ScanFailed` files.
+- [X] T013 [US1] Update `ContosoDashboard/Services/DocumentService.cs` to validate the 25 MB limit, extension allowlist, sanitized display name, required title/category, and optional project association before storage.
+- [X] T014 [US1] Update `ContosoDashboard/Services/DocumentService.cs` to persist uploaded documents as `PendingScan`, compute and store the content hash, publish exactly one scan message only after file/metadata persistence succeeds, and clean up storage on persistence failure.
+- [X] T015 [US1] Update `ContosoDashboard/Services/DocumentService.cs` to record upload audit events and ensure project notifications do not imply that a non-clean document is downloadable.
+- [X] T016 [US1] Update `ContosoDashboard/Pages/Documents.razor` to show upload progress/busy state, validation errors, `PendingScan`/terminal scan status, and a clear success message after the upload request completes.
+- [X] T017 [US1] Update `ContosoDashboard/Models/Document.cs` and `ContosoDashboard/Pages/Documents.razor` to support optional description, project association, tags, and user-visible scan-safe metadata without exposing the physical storage path.
+- [X] T018 [US1] Update `ContosoDashboard/Pages/Documents.razor` to disable download/preview actions until the document scan status is `Clean` and present safe messaging for `Quarantined` and `ScanFailed` files.
 
 **Checkpoint**: User Story 1 is independently demonstrable with local storage and the offline queue/scanner configuration.
 
