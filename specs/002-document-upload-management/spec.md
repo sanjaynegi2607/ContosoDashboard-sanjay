@@ -5,6 +5,12 @@
 **Status**: Draft  
 **Input**: User description: "--file StakeholderDocs/document-upload-and-management-feature.md"
 
+## Clarifications
+
+### Session 2026-09-10
+
+- Q: Should a document attached to a project be visible to all project members by default, or only to the uploader/owner and explicitly shared users? → A: Project members can see project documents by default; explicit shares extend access beyond the project.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Upload and organize work documents (Priority: P1)
@@ -77,7 +83,7 @@ Document owners and managers need a practical sharing model so the right people 
 - **FR-008**: The system MUST prevent path traversal, invalid names, and duplicate storage collisions by validating extensions and using generated file names.
 - **FR-009**: The system MUST support sorting and filtering by title, upload date, category, file size, and project association.
 - **FR-010**: The system MUST allow document search by title, description, tags, uploader name, and project name.
-- **FR-011**: The system MUST display only documents the current user is authorized to access.
+- **FR-011**: The system MUST display only documents the current user is authorized to access, and project members MUST have default access to documents attached to their project unless a document has explicit restrictions or additional sharing.
 - **FR-012**: The system MUST allow authorized users to download documents and preview common browser-viewable file types.
 - **FR-013**: The system MUST allow owners to update document metadata and replace a document with an updated file version.
 - **FR-014**: The system MUST allow document owners and project managers to delete documents after confirmation.
@@ -89,6 +95,8 @@ Document owners and managers need a practical sharing model so the right people 
 - **FR-020**: The system MUST expose a storage abstraction with an `IFileStorageService` contract that can be implemented locally and later swapped for Azure Blob Storage.
 - **FR-021**: The system MUST store document IDs as integers and category values as text strings so they match the existing application data model patterns.
 - **FR-022**: The system MUST work offline within the current Blazor and SQLite training architecture and remain compatible with the mock authentication system.
+- **FR-023**: The system MUST process uploaded files through an asynchronous virus-scan workflow, keep new files unavailable until scanning completes successfully, and mark detected malware or exhausted scan failures as unavailable for download or preview.
+- **FR-024**: The deployment configuration MUST support an Azure Functions Queue Storage trigger with bounded retries, poison/dead-letter handling, and idempotent scan-status updates; local training MUST support a disabled or deterministic local scanner without requiring Azure resources.
 
 ### Key Entities
 
