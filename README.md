@@ -137,8 +137,8 @@ public interface IFileStorageService
 
 ### Prerequisites
 
-- .NET 8.0 SDK or later
-- SQL Server LocalDB
+- .NET 10 SDK for the Blazor application
+- SQLite (created automatically by the application)
 - Visual Studio 2022 or Visual Studio Code
 
 ### Quick Start
@@ -160,6 +160,12 @@ public interface IFileStorageService
 4. **Login** - Select any user from the dropdown (no password required)
 
 The application automatically creates and seeds the database on first run with sample users, projects, tasks, and announcements.
+
+### Optional asynchronous document scanning
+
+The web application remains offline-compatible by default. Uploads are stored locally and marked `Clean` when `AzureStorage:ScanQueueEnabled` is `false`. To enable asynchronous scanning, configure an Azure Storage connection string and set `AzureStorage:ScanQueueEnabled` to `true`; the web app publishes versioned messages to the `document-scans` queue.
+
+The Azure Functions scanner is isolated in `ContosoDashboard.Scanner`. The current Functions Worker SDK supports `net8.0` for the worker, while the web application targets `net10.0`; both can be built with the installed .NET 10 SDK. Copy `ContosoDashboard.Scanner/local.settings.json.example` to `local.settings.json`, provide `AzureWebJobsStorage`, and run the scanner with Azure Functions Core Tools.
 
 ### Testing Security Features
 

@@ -69,6 +69,9 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Document>()
             .HasIndex(d => d.Category);
 
+        modelBuilder.Entity<Document>()
+            .HasIndex(d => d.ScanStatus);
+
         modelBuilder.Entity<DocumentShare>()
             .HasIndex(ds => new { ds.DocumentId, ds.UserId, ds.IsActive });
 

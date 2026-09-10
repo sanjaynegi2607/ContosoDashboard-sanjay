@@ -15,6 +15,9 @@ public class Document
     [MaxLength(2000)]
     public string? Description { get; set; }
 
+    [MaxLength(1000)]
+    public string? Tags { get; set; }
+
     [Required]
     [MaxLength(100)]
     public string Category { get; set; } = "General";
@@ -43,6 +46,18 @@ public class Document
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public bool IsDeleted { get; set; } = false;
+
+    [Required]
+    [MaxLength(32)]
+    public string ScanStatus { get; set; } = "Clean";
+
+    [MaxLength(128)]
+    public string? ScanContentHash { get; set; }
+
+    public DateTime? ScanUpdatedAtUtc { get; set; }
+
+    [MaxLength(500)]
+    public string? ScanError { get; set; }
 
     [ForeignKey("UploadedByUserId")]
     public virtual User UploadedByUser { get; set; } = null!;

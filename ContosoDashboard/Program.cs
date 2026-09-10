@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
+builder.Services.AddControllers();
 
 // Add authentication state provider for Blazor
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
@@ -45,6 +46,14 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
+if (builder.Configuration.GetValue("AzureStorage:ScanQueueEnabled", false))
+{
+    builder.Services.AddSingleton<IDocumentScanQueue, AzureDocumentScanQueue>();
+}
+else
+{
+    builder.Services.AddSingleton<IDocumentScanQueue, LocalDocumentScanQueue>();
+}
 
 // Add HttpContextAccessor for accessing user claims
 builder.Services.AddHttpContextAccessor();
@@ -108,6 +117,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapBlazorHub();
+app.MapControllers();
 app.MapFallbackToPage("/_Host");
 
 app.Run();

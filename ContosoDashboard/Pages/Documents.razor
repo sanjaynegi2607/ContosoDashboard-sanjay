@@ -50,6 +50,10 @@
                             <InputTextArea @bind-Value="uploadRequest.Description" class="form-control" rows="3" />
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label">Tags</label>
+                            <InputText @bind-Value="uploadRequest.Tags" class="form-control" placeholder="Comma-separated tags" />
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label">Project (optional)</label>
                             <InputNumber @bind-Value="uploadRequest.ProjectId" class="form-control" />
                         </div>
@@ -115,6 +119,7 @@
                         <th>Project</th>
                         <th>Uploaded</th>
                         <th>Size</th>
+                        <th>Scan</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -133,10 +138,18 @@
                             <td>@(document.Project?.Name ?? "Personal")</td>
                             <td>@document.UploadedAtUtc.ToString("MMM dd, yyyy")</td>
                             <td>@FormatBytes(document.FileSizeBytes)</td>
+                            <td><span class="badge @(document.ScanStatus == "Clean" ? "bg-success" : "bg-warning text-dark")">@document.ScanStatus</span></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <a class="btn btn-outline-primary" href="/documents/@document.DocumentId">View</a>
-                                    <button class="btn btn-outline-secondary" @onclick="() => DownloadAsync(document.DocumentId)">Download</button>
+                                    @if (string.Equals(document.ScanStatus, "Clean", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <button class="btn btn-outline-secondary" @onclick="() => DownloadAsync(document.DocumentId)">Download</button>
+                                    }
+                                    else
+                                    {
+                                        <span class="btn btn-outline-secondary disabled" title="Download is available after the security scan completes">Unavailable</span>
+                                    }
                                 </div>
                             </td>
                         </tr>
@@ -214,6 +227,7 @@
             {
                 Title = uploadRequest.Title,
                 Description = uploadRequest.Description,
+                Tags = uploadRequest.Tags,
                 Category = string.IsNullOrWhiteSpace(uploadRequest.Category) ? "General" : uploadRequest.Category,
                 ProjectId = uploadRequest.ProjectId > 0 ? uploadRequest.ProjectId : null
             };
@@ -293,6 +307,7 @@
         public string Title { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string? Tags { get; set; }
         public int ProjectId { get; set; }
     }
 }
