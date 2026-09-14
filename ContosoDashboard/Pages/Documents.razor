@@ -104,6 +104,10 @@
     {
         <p><em>Loading documents...</em></p>
     }
+    else if (isError && !string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <div class="alert alert-danger" role="alert">@statusMessage</div>
+    }
     else if (!documents.Any())
     {
         <div class="alert alert-info">No documents found for your current filter.</div>
@@ -190,15 +194,29 @@
     {
         if (currentUserId <= 0)
         {
+            documents = new List<Document>();
+            statusMessage = "Your session does not contain a valid user identifier. Please log in again.";
+            isError = true;
             return;
         }
 
-        documents = await DocumentService.GetAccessibleDocumentsAsync(currentUserId, null, searchTerm, categoryFilter);
-        categories = documents
-            .Select(d => d.Category)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(c => c)
-            .ToList();
+        try
+        {
+            documents = await DocumentService.GetAccessibleDocumentsAsync(currentUserId, null, searchTerm, categoryFilter);
+            categories = documents
+                .Select(d => d.Category)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(c => c)
+                .ToList();
+            statusMessage = null;
+            isError = false;
+        }
+        catch (Exception ex)
+        {
+            documents = new List<Document>();
+            statusMessage = $"Documents could not be loaded: {ex.Message}";
+            isError = true;
+        }
     }
 
     private async Task HandleFileSelected(InputFileChangeEventArgs e)
