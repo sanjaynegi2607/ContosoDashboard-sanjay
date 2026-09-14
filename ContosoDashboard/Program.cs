@@ -68,11 +68,57 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
         context.Database.EnsureCreated(); // For development - use migrations in production
+        EnsureDocumentScanColumns(context);
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "An error occurred creating the database.");
+    }
+}
+
+static void EnsureDocumentScanColumns(ApplicationDbContext context)
+{
+    var connection = context.Database.GetDbConnection();
+    var wasClosed = connection.State == System.Data.ConnectionState.Closed;
+
+    if (wasClosed)
+    {
+        connection.Open();
+    }
+
+    try
+    {
+        foreach (var column in new[]
+        {
+            (Name: "Tags", Definition: "TEXT NULL"),
+            (Name: "ScanStatus", Definition: "TEXT NOT NULL DEFAULT 'Clean'"),
+            (Name: "ScanContentHash", Definition: "TEXT NULL"),
+            (Name: "ScanUpdatedAtUtc", Definition: "TEXT NULL"),
+            (Name: "ScanError", Definition: "TEXT NULL")
+        })
+        {
+            using var existsCommand = connection.CreateCommand();
+            existsCommand.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Documents') WHERE name = $name";
+            var parameter = existsCommand.CreateParameter();
+            parameter.ParameterName = "$name";
+            parameter.Value = column.Name;
+            existsCommand.Parameters.Add(parameter);
+
+            if (Convert.ToInt32(existsCommand.ExecuteScalar()) == 0)
+            {
+                using var addColumnCommand = connection.CreateCommand();
+                addColumnCommand.CommandText = $"ALTER TABLE Documents ADD COLUMN {column.Name} {column.Definition}";
+                addColumnCommand.ExecuteNonQuery();
+            }
+        }
+    }
+    finally
+    {
+        if (wasClosed)
+        {
+            connection.Close();
+        }
     }
 }
 
